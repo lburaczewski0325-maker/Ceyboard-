@@ -1,0 +1,6 @@
+{
+  "name": "CipherKey",
+  "description": "End-to-end encrypted privacy keyboard with local key vault, key bank, voice input, and real-time English-Spanish translation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

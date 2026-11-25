@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">CipherKey</string>
+    <string name="ime_service_name">CipherKey Privacy Keyboard</string>
+    <string name="subtype_en_us">English (US) • CipherKey</string>
+    <string name="subtype_es_es">Español • CipherKey</string>
+    <string name="apk_release_page_url">https://github.com/cipherkey-app/cipherkey-android/releases/latest</string>
+    <string name="apk_direct_download_url">https://github.com/cipherkey-app/cipherkey-android/releases/latest/download/CipherKey-release.apk</string>
+    <string name="app_version_name">1.0.0</string>
+    <string name="nav_studio">Keyboard</string>
+    <string name="nav_vault">Key Vault</string>
+    <string name="nav_settings">Settings</string>
+    <string name="sign_in_title">End-to-End Encrypted Typing</string>
+    <string name="sign_in_subtitle">Encrypt and decrypt messages directly inside any text field. Keys remain encrypted at rest on your device and sync safely when online.</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+</resources>

@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string &&
+             id.size() >= 1 &&
+             id.size() <= 128 &&
+             id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidVaultKey(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 &&
+             data.userId.size() <= 128 &&
+             data.keyTag is string &&
+             data.keyTag.size() >= 1 &&
+             data.keyTag.size() <= 40 &&
+             data.fingerprint is string &&
+             data.fingerprint.size() >= 4 &&
+             data.fingerprint.size() <= 32 &&
+             data.fingerprint.matches('^[A-Za-z0-9\\-]+$') &&
+             data.publicKeyToken is string &&
+             data.publicKeyToken.size() >= 16 &&
+             data.publicKeyToken.size() <= 512 &&
+             data.cipherMode in ['STANDARD', 'HYPER'] &&
+             data.ownIdentity is bool &&
+             (!('encryptedSharedWrap' in data) || (data.encryptedSharedWrap is string && data.encryptedSharedWrap.size() <= 2048));
+    }
+
+    function isValidUserPrefs(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 &&
+             data.userId.size() <= 128 &&
+             data.hyperEncryptionDefault is bool &&
+             data.translationDirection in ['OFF', 'EN_TO_ES', 'ES_TO_EN'] &&
+             data.numberRowVisible is bool &&
+             data.hapticFeedbackEnabled is bool &&
+             data.autoCheckUpdates is bool;
+    }
+
+    match /users/{userId}/vault_keys/{keyId} {
+      allow get: if isOwner(userId) && isValidId(keyId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(keyId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'keyTag', 'fingerprint', 'publicKeyToken',
+                         'cipherMode', 'ownIdentity', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'keyTag', 'fingerprint', 'publicKeyToken',
+                         'cipherMode', 'encryptedSharedWrap', 'ownIdentity',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidVaultKey(incoming()) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time;
+
+      allow update: if isOwner(userId) &&
+                       isValidVaultKey(incoming()) &&
+                       isValidId(keyId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'keyTag', 'cipherMode', 'encryptedSharedWrap', 'updatedAt'
+                         ]) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'keyTag', 'publicKeyToken', 'fingerprint', 'cipherMode',
+                           'encryptedSharedWrap', 'updatedAt'
+                         ])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(keyId);
+    }
+
+    match /users/{userId}/preferences/{prefId} {
+      allow get: if isOwner(userId) && prefId == 'settings';
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       prefId == 'settings' &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'hyperEncryptionDefault', 'translationDirection',
+                         'numberRowVisible', 'hapticFeedbackEnabled', 'autoCheckUpdates',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'hyperEncryptionDefault', 'translationDirection',
+                         'numberRowVisible', 'hapticFeedbackEnabled', 'autoCheckUpdates',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserPrefs(incoming()) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time;
+
+      allow update: if isOwner(userId) &&
+                       isValidUserPrefs(incoming()) &&
+                       prefId == 'settings' &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'hyperEncryptionDefault', 'translationDirection',
+                         'numberRowVisible', 'hapticFeedbackEnabled',
+                         'autoCheckUpdates', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && prefId == 'settings';
+    }
+  }
+}

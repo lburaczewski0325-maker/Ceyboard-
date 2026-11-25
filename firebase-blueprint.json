@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "VaultKeyRecord": {
+      "title": "Vault Key Record",
+      "description": "Alphanumeric public key and encrypted vault wrap synced for a user's Key Bank.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the vault owner."
+        },
+        "keyTag": {
+          "type": "string",
+          "description": "Short label or key tag (no contact card required)."
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Short alphanumeric fingerprint of the public key."
+        },
+        "publicKeyToken": {
+          "type": "string",
+          "description": "Shareable alphanumeric ECDH public key token."
+        },
+        "cipherMode": {
+          "type": "string",
+          "enum": ["STANDARD", "HYPER"],
+          "description": "Preferred cipher mode for this key."
+        },
+        "encryptedSharedWrap": {
+          "type": "string",
+          "description": "Optional encrypted vault metadata blob."
+        },
+        "ownIdentity": {
+          "type": "boolean",
+          "description": "True if this record represents the user's own public identity key."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "keyTag",
+        "fingerprint",
+        "publicKeyToken",
+        "cipherMode",
+        "ownIdentity",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPreferences": {
+      "title": "User Preferences",
+      "description": "Synced keyboard and security preferences for the authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "hyperEncryptionDefault": {
+          "type": "boolean",
+          "description": "Whether Hyper Encryption is active by default."
+        },
+        "translationDirection": {
+          "type": "string",
+          "enum": ["OFF", "EN_TO_ES", "ES_TO_EN"],
+          "description": "Real-time translation toggle state."
+        },
+        "numberRowVisible": {
+          "type": "boolean",
+          "description": "Whether the Gboard top number row is shown."
+        },
+        "hapticFeedbackEnabled": {
+          "type": "boolean",
+          "description": "Whether keypress haptic feedback is enabled."
+        },
+        "autoCheckUpdates": {
+          "type": "boolean",
+          "description": "Whether periodic background update checks are enabled."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "userId",
+        "hyperEncryptionDefault",
+        "translationDirection",
+        "numberRowVisible",
+        "hapticFeedbackEnabled",
+        "autoCheckUpdates",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/vault_keys/{keyId}": {
+      "schema": {
+        "$ref": "#/entities/VaultKeyRecord"
+      },
+      "description": "Per-user Key Bank entries stored under the owner's UID."
+    },
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": {
+        "$ref": "#/entities/UserPreferences"
+      },
+      "description": "Per-user synced keyboard & security preferences document (settings)."
+    }
+  }
+}
