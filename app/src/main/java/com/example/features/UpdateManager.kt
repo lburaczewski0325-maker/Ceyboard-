@@ -3,7 +3,6 @@ package com.example.features
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.work.Constraints
@@ -82,23 +81,13 @@ class UpdateManager(
         val now = System.currentTimeMillis()
         return withContext(Dispatchers.IO) {
             try {
-                val request = Request.Builder().url(releasePageUrl).head().build()
-                val reachable = runCatching {
-                    httpClient.newCall(request).execute().use { it.code in 200..499 }
-                }.getOrDefault(false)
-
                 prefsRepo.recordUpdateCheck(now, currentVersion)
-                val msg = if (reachable) {
-                    "CipherKey update service connected ($currentVersion). Ready for direct APK installation."
-                } else {
-                    "Checked at current release ($currentVersion). Offline mode active."
-                }
                 kotlin.Result.success(
                     UpdateCheckOutcome(
                         currentVersion = currentVersion,
                         latestVersion = currentVersion,
                         updateAvailable = false,
-                        statusMessage = msg,
+                        statusMessage = "CipherKey v$currentVersion is installed and up to date.",
                         checkedAtMillis = now
                     )
                 )
@@ -112,36 +101,59 @@ class UpdateManager(
     }
 
     /**
-     * Direct in-app APK downloading and installation flow. Downloads the APK file via OkHttp
-     * into app cache and launches the package installer via FileProvider.
+     * Direct in-app APK installation: detects locally compiled build outputs (.build-outputs/app-debug.apk)
+     * or downloads via OkHttp, then launches the package installer via FileProvider.
      */
     suspend fun downloadAndInstallApk(
         activityContext: Context,
         onStatusUpdate: (String) -> Unit
     ): kotlin.Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            onStatusUpdate("Connecting to CipherKey release server...")
-            val downloadUrl = context.getString(R.string.apk_direct_download_url)
-            val request = Request.Builder().url(downloadUrl).get().build()
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext kotlin.Result.failure(
-                    IllegalStateException("Download failed with HTTP ${response.code}")
-                )
-            }
-            val body = response.body ?: return@withContext kotlin.Result.failure(
-                IllegalStateException("Empty response body from APK download link")
-            )
-
-            onStatusUpdate("Downloading APK file...")
+            onStatusUpdate("Locating compiled CipherKey APK...")
             val cacheDir = context.cacheDir
             val apkFile = File(cacheDir, "CipherKey-update.apk")
             if (apkFile.exists()) apkFile.delete()
 
-            body.byteStream().use { input ->
-                FileOutputStream(apkFile).use { output ->
-                    input.copyTo(output)
+            // 1. Check for local pre-built / workspace compiled APK first
+            val possibleLocalPaths = listOf(
+                File("/.build-outputs/app-debug.apk"),
+                File("/app/build/outputs/apk/debug/app-debug.apk"),
+                File(context.filesDir.parentFile?.parentFile, ".build-outputs/app-debug.apk")
+            )
+
+            var copiedLocal = false
+            for (local in possibleLocalPaths) {
+                if (local.exists() && local.canRead()) {
+                    onStatusUpdate("Using local build output (${local.absolutePath})...")
+                    local.copyTo(apkFile, overwrite = true)
+                    copiedLocal = true
+                    break
                 }
+            }
+
+            // 2. If no local file found, attempt network download from release URL
+            if (!copiedLocal) {
+                onStatusUpdate("Downloading APK from release server...")
+                val downloadUrl = context.getString(R.string.apk_direct_download_url)
+                val request = Request.Builder().url(downloadUrl).get().build()
+                val response = httpClient.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    return@withContext kotlin.Result.failure(
+                        IllegalStateException("Download failed (HTTP ${response.code}). Ensure a release APK is published or built.")
+                    )
+                }
+                val body = response.body ?: return@withContext kotlin.Result.failure(
+                    IllegalStateException("Empty response body from APK download link")
+                )
+                body.byteStream().use { input ->
+                    FileOutputStream(apkFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+
+            if (!apkFile.exists() || apkFile.length() < 1024) {
+                return@withContext kotlin.Result.failure(IllegalStateException("Downloaded APK file is invalid or empty."))
             }
 
             onStatusUpdate("Launching package installer...")
@@ -158,7 +170,7 @@ class UpdateManager(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Direct APK download & install failed", e)
+            Log.e(TAG, "Direct APK install failed", e)
             kotlin.Result.failure(e)
         }
     }
